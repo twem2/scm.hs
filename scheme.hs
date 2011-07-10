@@ -16,9 +16,19 @@ symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 spaces :: Parser ()
 spaces = skipMany1 space
 
+escapedChars :: Parser Char
+escapedChars = do char '\\'
+                  x <- oneOf "\\\"nrt"
+                  return $ case x of
+                             'n' -> '\n'
+                             'r' -> '\r'
+                             't' -> '\t'
+                             _   -> x
+                             
+
 parseString :: Parser LispVal
 parseString = do char '"'
-                 x <- many (noneOf "\"")
+                 x <- many (noneOf "\"" <|> escapedChars)
                  char '"'
                  return $ String x
                  
