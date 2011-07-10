@@ -91,6 +91,7 @@ parseExpr = parseAtom
         <|> parseOct
         <|> parseHex
         <|> parseDec
+        <|> parseBin
         
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
