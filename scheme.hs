@@ -2,6 +2,7 @@ module Main where
 import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
+import Numeric
 
 data LispVal = Atom String
              | List [LispVal]
@@ -11,7 +12,7 @@ data LispVal = Atom String
              | Bool Bool
 
 symbol :: Parser Char
-symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+symbol = oneOf "!$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
@@ -24,22 +25,58 @@ escapedChars = do char '\\'
                              'r' -> '\r'
                              't' -> '\t'
                              _   -> x
-                             
 
 parseString :: Parser LispVal
 parseString = do char '"'
                  x <- many (noneOf "\"" <|> escapedChars)
                  char '"'
                  return $ String x
-                 
+
 parseAtom :: Parser LispVal
 parseAtom = do first <- letter <|> symbol 
                rest <- many (letter <|> digit <|> symbol)
-               let atom = first:rest
-               return $ case atom of
+               return $ Atom (first:rest)
+
+parseBool :: Parser LispVal
+parseBool = do x <- string "#t" <|> string "#f"
+               return $ case x of
                           "#t" -> Bool True
                           "#f" -> Bool False
-                          _    -> Atom atom
+
+oct2dec :: String -> Integer
+oct2dec x = fst $ (readOct x) !! 0
+
+hex2dec :: String -> Integer
+hex2dec x = fst $ (readHex x) !! 0 
+
+readBinReversed :: String -> Integer
+readBinReversed "" = 0
+readBinReversed (x:xs) = case x of
+                          '0' -> 2 * readBinReversed xs
+                          '1' -> 2 * readBinReversed xs + 1
+
+readBin :: String -> Integer
+readBin x = readBinReversed $ reverse x
+
+parseOct :: Parser LispVal
+parseOct = do string "#o" 
+              x <- many1 $ oneOf "01234567"
+              (return . Number . oct2dec) x
+              
+parseHex :: Parser LispVal
+parseHex = do string "#x"
+              x <- many1 $ digit <|> oneOf "abcdefABCDEF"
+              (return . Number . hex2dec) x
+              
+parseDec :: Parser LispVal
+parseDec = do string "#d"
+              x <- many1 digit
+              (return . Number . read) x
+
+parseBin :: Parser LispVal
+parseBin = do string "#b"
+              x <- many1 $ oneOf "01" 
+              (return . Number . readBin) x
 
 parseNumber :: Parser LispVal
 --parseNumber = liftM (Number . read) $ many1 digit
@@ -49,9 +86,12 @@ parseNumber = many1 digit >>= return . Number . read
 
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
-        <|> parseString 
+        <|> parseString
         <|> parseNumber
-
+        <|> parseOct
+        <|> parseHex
+        <|> parseDec
+        
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> "No match: " ++ show err
