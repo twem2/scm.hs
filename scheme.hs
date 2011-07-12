@@ -86,22 +86,21 @@ parseNumber = do x <- parseOct <|> parseHex <|> parseBin <|> parseDec <|> parseD
 parseDec2 :: Parser LispVal
 parseDec2 = many1 digit >>= return . Number . read
 
--- parseCharacter :: Parser LispVal
--- parseCharacter = do string "#\\"
---                     x <- anyChar <|> 
---                       -- string "space" <|> string "newline" <|> (alphaNum >>= not alphaNum)
---                     case x of
---                       "space" -> return $ Character ' '
---                       "newline" -> return $ Character '\n'
---                       _ -> return $ Character (x !! 0)
-                    
-                    
+parseCharacter :: Parser LispVal
+parseCharacter = do string "#\\"
+                    x <- (try $ string "space") <|> (try $ string "newline") 
+                         <|> do { c <- anyChar; notFollowedBy alphaNum; return [c] }
+                    case x of
+                       "space" -> return $ Character ' '
+                       "newline" -> return $ Character '\n'
+                       _ -> return $ Character (x !! 0)
 
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
         <|> parseString
         <|> parseBool
         <|> parseNumber
+        <|> parseCharacter
 
         
 readExpr :: String -> String
@@ -115,7 +114,6 @@ main = do args <- getArgs
           
 test :: String -> IO ()
 test x = putStrLn $ x ++ " : " ++ readExpr x
-
 runTests :: IO ()
 runTests = do test "x" -- Atom
               test "\"foobar$\"" -- String
@@ -129,6 +127,10 @@ runTests = do test "x" -- Atom
               test "#x87AaFf"
               test "#d136125"
               test "#b101010011"
+              test "#\\space"
+              test "#\\newline"
+              test "#\\s"
+              -- test "#\\sp" -- should fail
         
 
   
