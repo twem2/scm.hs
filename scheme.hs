@@ -1,6 +1,6 @@
 module Main where
 import System.Environment
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec hiding (spaces, parseTest)
 import Control.Monad
 import Numeric
 
@@ -95,14 +95,31 @@ parseCharacter = do string "#\\"
                        "newline" -> return $ Character '\n'
                        _ -> return $ Character (x !! 0)
 
+parseList :: Parser LispVal
+parseList = liftM List $ sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do head <- endBy parseExpr spaces
+                     tail <- char '.' >> spaces >> parseExpr
+                     return $ DottedList head tail
+        
+parseQuoted = do char '\''
+                 x <- parseExpr
+                 return $ List [Atom "quote", x]
+                  
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
         <|> parseString
         <|> parseBool
         <|> parseNumber
         <|> parseCharacter
+        <|> parseQuoted
+        <|> do char '('
+               x <- try parseList <|> parseDottedList
+               char ')'
+               return x
 
-        
+
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
   Left err -> "No match: " ++ show err
@@ -112,25 +129,37 @@ main :: IO ()
 main = do args <- getArgs
           putStrLn (readExpr (args !! 0))
           
-test :: String -> IO ()
-test x = putStrLn $ x ++ " : " ++ readExpr x
-runTests :: IO ()
-runTests = do test "x" -- Atom
-              test "\"foobar$\"" -- String
-              test "\"out\\\"in\\\"out\"" -- String with quotes
-              test "\"\\\\\"" -- String with \
-              test "\"\\n\\t\\r\"" -- String with \n\t\r
-              test "#t" -- true
-              test "#f" -- false
-              test "1251261171"
-              test "#o712315"
-              test "#x87AaFf"
-              test "#d136125"
-              test "#b101010011"
-              test "#\\space"
-              test "#\\newline"
-              test "#\\s"
-              -- test "#\\sp" -- should fail
-        
+parseTest :: String -> IO ()
+parseTest x = case (readExpr x) of 
+  "Found value" -> putStrLn $ "pass [" ++ x ++ "]"
+  _ -> putStrLn $ "FAIL [" ++ x ++ "]"
 
-  
+parseTestFail :: String -> IO ()
+parseTestFail x = case (readExpr x) of 
+  "Found value" -> putStrLn $ "FAIL [" ++ x ++ "]"
+  _ -> putStrLn $ "pass [" ++ x ++ "]"
+
+
+runTests :: IO ()
+runTests = do parseTest "x" -- Atom
+              parseTest "\"foobar$\"" -- String
+              parseTest "\"out\\\"in\\\"out\"" -- String with quotes
+              parseTest "\"\\\\\"" -- String with \
+              parseTest "\"\\n\\t\\r\"" -- String with \n\t\r
+              parseTest "#t" -- true
+              parseTest "#f" -- false
+              parseTest "1251261171"
+              parseTest "#o712315"
+              parseTest "#x87AaFf"
+              parseTest "#d136125"
+              parseTest "#b101010011"
+              parseTest "#\\space"
+              parseTest "#\\newline"
+              parseTest "#\\s"
+              parseTestFail "#\\sp" -- should fail
+              putStrLn $ if (readBin "1010") == 10 then "pass [binary test]" else "FAIL [binary test]"  
+              parseTest "(a parseTest)"
+              parseTest "(a (nester) parseTest)"
+              parseTest "(a (dotted . list) parseTest)"
+              parseTest "(a '(quoted (dotted . list)) parseTest)"
+              parseTestFail "(a '(imbalanced parens)" -- should fail
